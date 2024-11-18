@@ -7,7 +7,7 @@ import math
 # Configuració del joc
 WIDTH, HEIGHT = 1200, 700
 FPS = 60
-NUMEROS = list(range(37))
+Nombres = list(range(37))
 COLORS = {0: (0, 255, 0), **{n: (255, 0, 0) if n % 2 else (0, 0, 0) for n in range(1, 37)}}
 
 # Inicialitzar Pygame
@@ -32,7 +32,7 @@ class Ruleta:
 
     def girar(self):
         """Seleccionar un número aleatori com a resultat."""
-        self.resultat = random.choice(NUMEROS)
+        self.resultat = random.choice(Nombres)
         return self.resultat
 
 # Classe jugador
@@ -56,11 +56,11 @@ def dibuixar_ruleta(winning_number=None, angle=0):
     """Dibuixa la ruleta amb un indicador del número guanyador."""
     center = (600, 300)
     radius = 200
-    num_sectors = len(NUMEROS)
+    num_sectors = len(Nombres)
     angle_per_sector = 360 / num_sectors
 
     # Dibuixar sectors
-    for i, num in enumerate(NUMEROS):
+    for i, num in enumerate(Nombres):
         start_angle = math.radians(i * angle_per_sector + angle)
         end_angle = math.radians((i + 1) * angle_per_sector + angle)
         color = COLORS[num]
@@ -74,7 +74,7 @@ def dibuixar_ruleta(winning_number=None, angle=0):
         pygame.draw.polygon(screen, BLACK, points, 1)
 
     # Dibuixar els números
-    for i, num in enumerate(NUMEROS):
+    for i, num in enumerate(Nombres):
         num_angle = math.radians(i * angle_per_sector + angle_per_sector / 2 + angle)
         x = center[0] + (radius - 30) * math.cos(num_angle)
         y = center[1] - (radius - 30) * math.sin(num_angle)
@@ -86,14 +86,20 @@ def dibuixar_ruleta(winning_number=None, angle=0):
 
 # Funció per dibuixar la taula rectangular de la ruleta
 def dibuixar_taula():
-    """Dibuixa una taula rectangular amb els números de la ruleta."""
+    """Dibuixa una taula rectangular amb els números de la ruleta i espais d'aposta."""
     CELL_WIDTH = 80
     CELL_HEIGHT = 50
-    for i, num in enumerate(NUMEROS):
+
+    # Coordenades inicials
+    OFFSET_X = 100
+    OFFSET_Y = 100
+
+    # Dibuixar números
+    for i, num in enumerate(Nombres):
         row = (i - 1) // 3 if num != 0 else 0
         col = (i - 1) % 3 if num != 0 else 0
-        x = 50 + col * CELL_WIDTH if num != 0 else 0
-        y = 50 + row * CELL_HEIGHT if num != 0 else 0
+        x = OFFSET_X + col * CELL_WIDTH if num != 0 else OFFSET_X
+        y = OFFSET_Y + row * CELL_HEIGHT if num != 0 else OFFSET_Y
 
         color = COLORS[num]
         pygame.draw.rect(screen, color, (x, y, CELL_WIDTH, CELL_HEIGHT))
@@ -101,6 +107,34 @@ def dibuixar_taula():
 
         text = font.render(str(num), True, WHITE if color != BLACK else RED)
         screen.blit(text, (x + (CELL_WIDTH - text.get_width()) // 2, y + (CELL_HEIGHT - text.get_height()) // 2))
+
+    # Espais d'aposta horitzontals a sota de la ruleta
+    apuesta_y = OFFSET_Y + 450  # Alçada de la base per les apostes
+    espacio_entre = 20
+
+    # Espais per vermell/negre
+    pygame.draw.rect(screen, RED, (OFFSET_X, apuesta_y, 150, 50))  # Vermell
+    pygame.draw.rect(screen, BLACK, (OFFSET_X + 170, apuesta_y, 150, 50))  # Negre
+    screen.blit(font.render("VERMELL", True, WHITE), (OFFSET_X + 20, apuesta_y + 15))
+    screen.blit(font.render("NEGRE", True, WHITE), (OFFSET_X + 190, apuesta_y + 15))
+
+    # Espais per parell/senar
+    pygame.draw.rect(screen, WHITE, (OFFSET_X + 340, apuesta_y, 150, 50))  # Parell
+    pygame.draw.rect(screen, WHITE, (OFFSET_X + 510, apuesta_y, 150, 50))  # Senar
+    screen.blit(font.render("PARELL", True, BLACK), (OFFSET_X + 360, apuesta_y + 15))
+    screen.blit(font.render("SENAR", True, BLACK), (OFFSET_X + 530, apuesta_y + 15))
+
+    # Espais per les tres columnes
+    for i in range(3):
+        x = OFFSET_X + 680 + i * (150 + espacio_entre)
+        pygame.draw.rect(screen, GREEN, (x, apuesta_y, 150, 50))
+        screen.blit(font.render(f"COLUMNA {i+1}", True, BLACK), (x + 20, apuesta_y + 15))
+
+    # Quadre de "Banca" a la dreta
+    pygame.draw.rect(screen, BROWN, (950, 100, 200, 80))  # Banca
+    pygame.draw.rect(screen, WHITE, (950, 100, 200, 80), 2)  # Contorn
+    screen.blit(font.render("BANCA", True, WHITE), (1000, 130))
+
 
 # Simulació de l'animació de gir
 def animar_gir(ruleta, girs=10):
@@ -120,6 +154,7 @@ def animar_gir(ruleta, girs=10):
 # Bucle principal del joc
 ruleta = Ruleta()
 jugadors = [Jugador("Taronja"), Jugador("Lila"), Jugador("Blau")]
+
 
 running = True
 while running:
