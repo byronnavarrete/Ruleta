@@ -11,6 +11,17 @@ COLUMNES = {1: [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34],
             3: [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36]}
 FITXES_VALORS = [5, 10, 20, 50, 100]
 AMPLADA, ALCADA = 800, 600
+# Ordre i colors dels números de la ruleta
+NOMBRES_RUETA = [
+    (0, "verd"), (32, "vermell"), (15, "negre"), (19, "vermell"), (4, "negre"),
+    (21, "vermell"), (2, "negre"), (25, "vermell"), (17, "negre"), (34, "vermell"),
+    (6, "negre"), (27, "vermell"), (13, "negre"), (36, "vermell"), (11, "negre"),
+    (30, "vermell"), (8, "negre"), (23, "vermell"), (10, "negre"), (5, "vermell"),
+    (24, "negre"), (16, "vermell"), (33, "negre"), (1, "vermell"), (20, "negre"),
+    (14, "vermell"), (31, "negre"), (9, "vermell"), (22, "negre"), (18, "vermell"),
+    (29, "negre"), (7, "vermell"), (28, "negre"), (12, "vermell"), (35, "negre"),
+    (3, "vermell"), (26, "negre")
+]
 
 pygame.init()
 clock = pygame.time.Clock()
@@ -77,6 +88,7 @@ class Partida:
                         jugador.afegir_guanys(quantitat * 3)
             jugador.apostes.clear()
 
+
     def jugar_tirada(self):
         resultat = self.ruleta.girar()
         self.calcular_guanys(resultat)
@@ -128,16 +140,44 @@ def mostrar_historial(screen, historial):
 
 # Interfície gràfica
 def dibuixar_ruleta(screen, resultat=None):
+    # Dibuixem el cercle principal de la ruleta
     pygame.draw.circle(screen, (200, 200, 200), (400, 300), 200, 0)
     font = pygame.font.Font(None, 24)
-    for i, num in enumerate(NUMEROS):
-        angle = math.radians(i * (360 / len(NUMEROS)))
+    
+    for i, (num, color) in enumerate(NOMBRES_RUETA):
+        angle = math.radians(i * (360 / len(NOMBRES_RUETA)))
         x = 400 + 180 * math.cos(angle)
         y = 300 - 180 * math.sin(angle)
-        text = font.render(str(num), True, (0, 0, 0))
+        text = font.render(str(num), True, (255, 0, 0) if color == "vermell" else (0, 0, 0) if color == "negre" else (0, 255, 0))
         screen.blit(text, (x - text.get_width() / 2, y - text.get_height() / 2))
+        # Línia divisòria
+        x_final = 400 + 180 * math.cos(angle)
+        y_final = 300 - 180 * math.sin(angle)
+        pygame.draw.line(screen, (0, 0, 0), (400, 300), (x_final, y_final), 1)
+
     if resultat:
-        pygame.draw.line(screen, (255, 0, 0), (400, 300), (400, 100), 5)
+     # Determinem l'angle del número guanyador
+        index = next(i for i, (num, _) in enumerate(NOMBRES_RUETA) if num == resultat[0])
+        resultat_angle = math.radians(index * (360 / len(NOMBRES_RUETA)))
+        x_final = 400 + 150 * math.cos(resultat_angle)
+        y_final = 300 - 150 * math.sin(resultat_angle)
+        # Dibuixem la línia que assenyala el número guanyador
+        pygame.draw.line(screen, (255, 0, 0), (400, 300), (x_final, y_final), 3)
+
+
+      # Dibuixem línies per als pals
+    for i in range(len(NOMBRES_RUETA)):
+        angle = math.radians(i * (360 / len(NOMBRES_RUETA)))
+        x_final = 400 + 180 * math.cos(angle)
+        y_final = 300 - 180 * math.sin(angle)
+        pygame.draw.line(screen, (0, 0, 0), (400, 300), (x_final, y_final), 1)
+    
+
+    # Dibuixem els números i les línies divisòries
+    
+
+    # Afegim una línia per escollir el número guanyador
+    
 
 def dibuixar_taula_apostes(screen):
     # Espais per apostes
@@ -187,17 +227,17 @@ def joc_grafic():
             if event.type == pygame.QUIT:
                 running = False
             if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                # Girem la ruleta i obtenim el resultat
                 resultat = partida.ruleta.girar()
-                origen = (400, 300)
-                desti = (600, 100)
-                moure_fitxes(screen, origen, desti, (255, 0, 0))
+                partida.calcular_guanys(resultat)
 
-        screen.fill((0, 128, 0))
-        dibuixar_ruleta(screen, resultat)
+        screen.fill((0, 128, 0))  # Color verd de fons
+        dibuixar_ruleta(screen, resultat)  # Dibuixa la ruleta amb la línia guanyadora
         pygame.display.flip()
         clock.tick(30)
 
     pygame.quit()
+
 
 if __name__ == "__main__":
     joc_grafic()
