@@ -5,7 +5,7 @@ import random
 import math
 
 # Configuració del joc
-WIDTH, HEIGHT = 1200, 700
+WIDTH, HEIGHT = 1400, 900
 FPS = 60
 Nombres = list(range(37))
 COLORS = {0: (0, 255, 0), **{n: (255, 0, 0) if n % 2 else (0, 0, 0) for n in range(1, 37)}}
@@ -137,7 +137,7 @@ def dibuixar_taula():
 
 
 # Simulació de l'animació de gir
-def animar_gir(ruleta, girs=10):
+def animar_gir(ruleta, girs=15):
     """Simula el gir de la ruleta amb velocitat decreixent."""
     angle = 0
     velocitat = 20  # Velocitat inicial en graus/frame
