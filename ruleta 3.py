@@ -102,27 +102,37 @@ def draw_table():
     espacio_entre = 40
 
     # Espais per vermell/negre
-    pygame.draw.rect(screen, RED, (OFFSET_X, apuesta_y, 550, 50))  # Vermell
-    pygame.draw.rect(screen, BLACK, (OFFSET_X + 170, apuesta_y, 550, 50))  # Negre
+    pygame.draw.rect(screen, RED, (OFFSET_X, apuesta_y, 550, 200))  # Vermell
+    pygame.draw.rect(screen, BLACK, (OFFSET_X, apuesta_y, 550, 200), 2)
+    pygame.draw.rect(screen, BLACK, (OFFSET_X + 170, apuesta_y, 550, 200))  # Negre
     screen.blit(font.render("VERMELL", True, WHITE), (OFFSET_X + 20, apuesta_y + 15))
     screen.blit(font.render("NEGRE", True, WHITE), (OFFSET_X + 190, apuesta_y + 15))
 
     # Espais per parell/senar
-    pygame.draw.rect(screen, WHITE, (OFFSET_X + 340, apuesta_y, 400, 50))  # Parell
-    pygame.draw.rect(screen, WHITE, (OFFSET_X + 510, apuesta_y, 500, 50))  # Senar
+    pygame.draw.rect(screen, WHITE, (OFFSET_X + 340, apuesta_y, 350, 200))  # Parell
+    pygame.draw.rect(screen, WHITE, (OFFSET_X + 540, apuesta_y, 520, 200))  # Senar
+    pygame.draw.rect(screen, BLACK, (OFFSET_X + 340, apuesta_y, 400, 200), 2)
+    pygame.draw.rect(screen, BLACK, (OFFSET_X + 492, apuesta_y, 480, 200), 2)
     screen.blit(font.render("PARELL", True, BLACK), (OFFSET_X + 400, apuesta_y + 15))
     screen.blit(font.render("SENAR", True, BLACK), (OFFSET_X + 500, apuesta_y + 15))
 
     # Espais per les tres columnes
     for i in range(3):
         x = OFFSET_X + 680 + i * (150 + espacio_entre)
-        pygame.draw.rect(screen, GREEN, (x, apuesta_y, 750, 50))
+        pygame.draw.rect(screen, GREEN, (x, apuesta_y, 750, 200))
+        pygame.draw.rect(screen, BLACK, (x, apuesta_y, 750, 200), 2)
         screen.blit(font.render(f"COLUMNA {i+1}", True, BLACK), (x + 20, apuesta_y + 15))
 
     # Quadre de "Banca" a la dreta
     pygame.draw.rect(screen, BROWN, (1000, 500, 200, 80))  # Banca
     pygame.draw.rect(screen, WHITE, (1000, 500, 200, 80), 2)  # Contorn
     screen.blit(font.render("BANCA", True, WHITE), (1050, 530))
+
+    # quadre de "gira"
+    pygame.draw.rect(screen, BROWN, (600, 500, 200, 60))  # Dibujar rectángulo
+    pygame.draw.rect(screen, RED, (600, 500, 200, 60), 4)  # Borde del botón
+    text = font.render("GIRAR", True, WHITE)
+    screen.blit(text, (650, 520))  # Posicionar texto en el botón
 
 # Función para dibujar la ruleta circular con colores correspondientes
 def draw_roulette(winning_number=None):
@@ -157,7 +167,13 @@ def draw_roulette(winning_number=None):
     # Dibujar el número ganador si existe
     if winning_number is not None:
         pygame.draw.circle(screen, RED, center, 15)
+        result_text = font.render(f"Resultat: {winning_number}", True, WHITE)
+        screen.blit(result_text, (700, 600))
     pygame.draw.line(screen, RED, (center[0], center[1] - radius - 10), (center[0], center[1] - radius - 30), 4)
+    
+    
+
+    
 # Simulació de l'animació de gir
 def animar_gir(ruleta, girs=15):
     """Simula el gir de la ruleta amb velocitat decreixent."""
@@ -185,11 +201,11 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
-        if event.type == pygame.MOUSEBUTTONDOWN:  # Botó de girar
+        if event.type == pygame.MOUSEBUTTONDOWN:  # Detectar clic
             x, y = pygame.mouse.get_pos()
-            if 800 <= x <= 900 and 500 <= y <= 550:  # Botó "Girar"
-                numero_guanyador = animar_gir(ruleta)
-                winning_number, _ = ruleta.girar()
+            if 700 <= x <= 900 and 500 <= y <= 580:  # Verificar clic en el botón "Girar"
+                winning_number, _ = ruleta.girar()  # Girar la ruleta y obtener el número ganador
+
 
     # Dibujar el fondo
     screen.fill(BROWN)
