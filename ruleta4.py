@@ -54,16 +54,40 @@ class Jugador:
         self.nom = nom
         self.saldo = saldo
         self.apostes = []  # (tipus, quantitat, valor)
+        self.fichas = self.inicializar_fichas()
 
+    def inicializar_fichas(self):
+        """Inicializa las fichas para que sumen al saldo inicial."""
+        fichas = {5: 2, 10: 2, 20: 1, 50: 1, 100: 0}
+        self.saldo = sum(k * v for k, v in fichas.items())
+        return fichas
+
+    def mostrar_fichas(self):
+        """Muestra las fichas del jugador."""
+        output = []
+        for valor, cantidad in sorted(self.fichas.items(), reverse=True):
+            output.append(f"{valor:03} x {cantidad}")
+        output.append(f"Crèdit: {self.saldo}")
+        return "\n".join(output)
+
+    def reorganizar_fichas(self):
+        """Reorganiza las fichas maximizando la variedad."""
+        valores = sorted(self.fichas.keys(), reverse=True)
+        nuevo_fichas = {v: 0 for v in valores}
+        saldo_restante = self.saldo
+
+        for valor in valores:
+            nuevo_fichas[valor] = saldo_restante // valor
+            saldo_restante %= valor
+
+        self.fichas = nuevo_fichas
+    def afegir_guanys(self, quantitat):
+        self.saldo += quantitat
     def apostar(self, tipus, quantitat, valor):
         if quantitat > self.saldo:
             raise ValueError(f"{self.nom} no té saldo suficient.")
         self.saldo -= quantitat
         self.apostes.append((tipus, quantitat, valor))
-
-    def afegir_guanys(self, quantitat):
-        self.saldo += quantitat
-
 # Crear una instancia de la ruleta
 ruleta = Ruleta()
 
@@ -193,8 +217,20 @@ def animar_gir(ruleta, girs=15):
 ruleta = Ruleta()
 jugadors = [Jugador("Taronja"), Jugador("Lila"), Jugador("Blau")]
 
+# Función para dibujar las fichas de los jugadores
+def draw_player_chips(jugadors):
+    """Dibuja el estado de las fichas de cada jugador en la interfaz."""
+    x_offset, y_offset = 50, 600
+    for i, jugador in enumerate(jugadors):
+        pygame.draw.rect(screen, WHITE, (x_offset, y_offset + i * 120, 400, 100))
+        text = font.render(f"{jugador.nom}: {jugador.saldo} crèdit", True, BLACK)
+        screen.blit(text, (x_offset + 10, y_offset + i * 120 + 10))
+        fichas_text = jugador.mostrar_fichas().split("\n")
+        for j, linea in enumerate(fichas_text):
+            ficha_text = font.render(linea, True, BLACK)
+            screen.blit(ficha_text, (x_offset + 10, y_offset + i * 120 + 40 + j * 20))
 
-# Bucle principal del juego
+# Bucle principal del juego (actualizado)
 running = True
 winning_number = None
 while running:
@@ -206,7 +242,6 @@ while running:
             if 700 <= x <= 900 and 500 <= y <= 580:  # Verificar clic en el botón "Girar"
                 winning_number, _ = ruleta.girar()  # Girar la ruleta y obtener el número ganador
 
-
     # Dibujar el fondo
     screen.fill(BROWN)
     
@@ -215,7 +250,10 @@ while running:
     
     # Dibujar la ruleta circular con colores correspondientes
     draw_roulette(winning_number)
-    
+
+    # Dibujar el estado de las fichas de cada jugador
+    draw_player_chips(jugadors)
+
     # Actualizar la pantalla
     pygame.display.flip()
 

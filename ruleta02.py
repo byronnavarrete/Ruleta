@@ -1,183 +1,304 @@
 #!/usr/bin/env python3
 import pygame
+import sys
 import random
 import math
+import pydevd_file_utils
+# Inicializar Pygame
+pygame.init()
 
-# Constants del joc
-NOMBRES = list(range(37))  # De 0 a 36
-COLORS = {0: "verd", **{n: "vermell" if n % 2 else "negre" for n in range(1, 37)}}
-COLUMNES = {1: [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34],
-            2: [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
-            3: [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36]}
-FITXES_VALORS = [5, 10, 20, 50, 100]
-AMPLADA, ALCADA = 800, 600
+# Configuración de la ventana
+WIDTH, HEIGHT = 1400, 900
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Ruleta de Casino con Tabla")
+FPS = 60
+# Colores
+BLACK = (0, 0, 0)
+RED = (255, 0, 0)
+GREEN = (0, 128, 0)
+WHITE = (255, 255, 255)
+BROWN = (215, 129, 36)
+
+# Fuente
+font = pygame.font.SysFont("Arial", 24)
+clock = pygame.time.Clock()
+
+# Configuración de la tabla de ruleta
+numbers = [
+    ('0', GREEN), ('1', RED), ('2', BLACK), ('3', RED), ('4', BLACK), ('5', RED), ('6', BLACK),
+    ('7', RED), ('8', BLACK), ('9', RED), ('10', BLACK), ('11', BLACK), ('12', RED),
+    ('13', BLACK), ('14', RED), ('15', BLACK), ('16', RED), ('17', BLACK), ('18', RED),
+    ('19', RED), ('20', BLACK), ('21', RED), ('22', BLACK), ('23', RED), ('24', BLACK),
+    ('25', RED), ('26', BLACK), ('27', RED), ('28', BLACK), ('29', BLACK), ('30', RED),
+    ('31', BLACK), ('32', RED), ('33', BLACK), ('34', RED), ('35', BLACK), ('36', RED)
+]
+
+# Tamaño de cada celda en la tabla
+CELL_WIDTH = 80
+CELL_HEIGHT = 50
+
+# Configuración de la ruleta
+NUMEROS = list(range(37))  # De 0 a 36
+COLORS = {int(numbers[i][0]): numbers[i][1] for i in range(len(numbers))}
+
+class Ruleta:
+    def __init__(self):
+        self.resultado = None
+
+    def girar(self):
+        self.resultado = random.choice(NUMEROS)
+        return self.resultado, COLORS[self.resultado]
 
 class Jugador:
     def __init__(self, nom, saldo=100):
         self.nom = nom
         self.saldo = saldo
-        self.fitxes = {val: 0 for val in FITXES_VALORS}
-        self._distribuir_fitxes()
-        self.apostes = []  # Ex. [(tipus, valor)]
+        self.fitxes = {100: 0, 50: 1, 20: 1, 10: 2, 5: 2}
+        self.apostes = []
 
-    def _distribuir_fitxes(self):
-        restant = self.saldo
-        for val in sorted(FITXES_VALORS, reverse=True):
-            self.fitxes[val], restant = divmod(restant, val)
-
-    def apostar(self, quantitat, tipus_aposta):
+    def apostar(self, tipus, quantitat, valor):
         if quantitat > self.saldo:
-            raise ValueError(f"{self.nom} no té saldo suficient!")
+            raise ValueError(f"{self.nom} no té saldo suficient.")
         self.saldo -= quantitat
-        self.apostes.append((tipus_aposta, quantitat))
+        self.apostes.append((tipus, quantitat, valor))
+
+    def mostrar_fitxes(self):
+        return f"{self.nom}: Sald: {self.saldo} | Fitxes: {self.fitxes}"
 
     def afegir_guanys(self, quantitat):
         self.saldo += quantitat
-        self._distribuir_fitxes()
 
-    def dibuixar_fitxes(screen, jugador, pos_x, pos_y):
-    # Exemple per dibuixar les fitxes d'un jugador
-        font = pygame.font.Font(None, 24)
-        for valor, quantitat in jugador.fitxes.items():
-            for i in range(quantitat):
-                # Dibuixar una fitxa de color
-                pygame.draw.circle(screen, (255, 165, 0), (pos_x, pos_y), 15)
-                pos_y += 30  # Espai entre fitxes
-                text = font.render(f"{valor} x {quantitat}", True, (0, 0, 0))
-                screen.blit(text, (pos_x + 20, pos_y))
+# Crear una instancia de la ruleta
+ruleta = Ruleta()
 
 
-class Ruleta:
-    def __init__(self):
-        self.resultat = None
+def calcular_guanys(jugador, aposta, resultat):
+    tipus, quantitat, valor = aposta
+    guany = 0
+    if tipus == "numero" and resultat["numero"] == valor:
+        guany = quantitat * 35
+    elif tipus == "color" and resultat["color"] == valor:
+        guany = quantitat * 1
+    elif tipus == "parell/senar" and resultat["parell/senar"] == valor:
+        guany = quantitat * 1
+    elif tipus == "columna" and resultat["columna"] == valor:
+        guany = quantitat * 2
+    return guany
 
-    def girar(self):
-        self.resultat = random.choice(NOMBRES)
-        return self.resultat, COLORS[self.resultat]
+def processar_apostes(jugadors, resultat):
+    banca = 0
+    for jugador in jugadors:
+        guany_total = 0
+        for aposta in jugador.apostes:
+            guany = calcular_guanys(jugador, aposta, resultat)
+            if guany > 0:
+                guany_total += guany
+            else:
+                banca += aposta[1]  # Suma les apostes perdudes a la banca
+        jugador.guanyar(guany_total)
+        jugador.apostes = []  # Esborrar apostes
+    return banca
+
+# Función para dibujar la tabla de ruleta
+def draw_table():
     
-    def dibuixar_taula_apostes(screen):
-    # Espais per apostes
-        pygame.draw.rect(screen, (255, 0, 0), pygame.Rect(50, 450, 100, 50))  # Espai "vermell"
-        pygame.draw.rect(screen, (0, 0, 0), pygame.Rect(150, 450, 100, 50))  # Espai "negre"
-        pygame.draw.rect(screen, (255, 255, 255), pygame.Rect(250, 450, 100, 50))  # Espai "parell"
-        pygame.draw.rect(screen, (255, 255, 255), pygame.Rect(350, 450, 100, 50))  # Espai "senar"
-        pygame.draw.rect(screen, (0, 128, 0), pygame.Rect(450, 450, 100, 50))  # Espai "columna1"
-        # Afegeix més espais per columna 2 i 3...
+    CELL_WIDTH = 80
+    CELL_HEIGHT = 50
+
+    # Coordenades inicials
+    OFFSET_X = 100
+    OFFSET_Y = 100
 
 
-class Partida:
-    def __init__(self):
-        self.ruleta = Ruleta()
-        self.jugadors = [Jugador("Taronja"), Jugador("Lila"), Jugador("Blau")]
-        self.historial = []
-
-    def calcular_guanys(self, resultat):
-        for jugador in self.jugadors:
-            for tipus, quantitat in jugador.apostes:
-                # Número exacte
-                if tipus == "numero" and resultat[0] == tipus:
-                    jugador.afegir_guanys(quantitat * 35)
-                # Color (vermell/negre)
-                elif tipus == "color" and resultat[1] == tipus:
-                    jugador.afegir_guanys(quantitat * 2)
-                # Parell/Senar
-                elif tipus == "parell" and resultat[0] != 0 and resultat[0] % 2 == 0:
-                    jugador.afegir_guanys(quantitat * 2)
-                elif tipus == "senar" and resultat[0] % 2 != 0:
-                    jugador.afegir_guanys(quantitat * 2)
-                # Columna
-                elif tipus in ["columna1", "columna2", "columna3"]:
-                    columna = COLUMNES[int(tipus[-1])]
-                    if resultat[0] in columna:
-                        jugador.afegir_guanys(quantitat * 3)
-            jugador.apostes.clear()
-
-    def jugar_tirada(self):
-        resultat = self.ruleta.girar()
-        self.calcular_guanys(resultat)
-        self.historial.append({"resultat": resultat, "jugadors": [(j.nom, j.saldo) for j in self.jugadors]})
-
+    # Dibujar el número 0 en una celda separada
+    pygame.draw.rect(screen, GREEN, (50, 50, CELL_WIDTH, CELL_HEIGHT))
+    text = font.render('0', True, WHITE)
+    screen.blit(text, (50 + (CELL_WIDTH - text.get_width()) // 2, 50 + (CELL_HEIGHT - text.get_height()) // 2))
     
+    # Dibujar los números del 1 al 36 en la tabla
+    for i, (number, color) in enumerate(numbers[1:], start=1):
+        row = (i - 1) // 3
+        col = (i - 1) % 3
+        x = 150 + col * CELL_WIDTH
+        y = 0 + row * CELL_HEIGHT
 
-# Funció per mostrar moviment de fitxes
-def moure_fitxes(screen, origen, desti, color):
-    x1, y1 = origen
-    x2, y2 = desti
-    passos = 20
-    for i in range(passos):
-        x = x1 + (x2 - x1) * i / passos
-        y = y1 + (y2 - y1) * i / passos
-        pygame.draw.circle(screen, color, (int(x), int(y)), 10)
-        pygame.display.flip()
-        pygame.time.delay(30)
+        # Dibujar la celda
+        pygame.draw.rect(screen, color, (x, y, CELL_WIDTH, CELL_HEIGHT))
+        pygame.draw.rect(screen, WHITE, (x, y, CELL_WIDTH, CELL_HEIGHT), 2)  # Borde blanco
 
-def moure_fitxa(screen, jugador, mouse_x, mouse_y):
-    # Exemple per detectar el moviment d'una fitxa
-    if jugador.fitxes[5] > 0:  # Si el jugador té fitxes de valor 5
-        pygame.draw.circle(screen, (255, 165, 0), (mouse_x, mouse_y), 15)
+        # Dibujar el número dentro de la celda
+        text = font.render(number, True, WHITE if color != BLACK else WHITE)
+        screen.blit(text, (x + (CELL_WIDTH - text.get_width()) // 2, y + (CELL_HEIGHT - text.get_height()) // 2))
+    # Espais d'aposta horitzontals a sota de la ruleta
+    apuesta_y = OFFSET_Y + 550  # Alçada de la base per les apostes
+    espacio_entre = 40
 
-def moure_fitxes_cap_a_banca(screen, origen, banc):
-    # Mou les fitxes cap a la banca
-    pygame.draw.circle(screen, (0, 0, 0), banc, 15)
+    # Espais per vermell/negre
+    pygame.draw.rect(screen, RED, (OFFSET_X, apuesta_y, 550, 200))  # Vermell
+    pygame.draw.rect(screen, BLACK, (OFFSET_X, apuesta_y, 550, 200), 2)
+    pygame.draw.rect(screen, BLACK, (OFFSET_X + 170, apuesta_y, 550, 200))  # Negre
+    screen.blit(font.render("VERMELL", True, WHITE), (OFFSET_X + 20, apuesta_y + 15))
+    screen.blit(font.render("NEGRE", True, WHITE), (OFFSET_X + 190, apuesta_y + 15))
 
+    # Espais per parell/senar
+    pygame.draw.rect(screen, WHITE, (OFFSET_X + 340, apuesta_y, 350, 200))  # Parell
+    pygame.draw.rect(screen, WHITE, (OFFSET_X + 540, apuesta_y, 520, 200))  # Senar
+    pygame.draw.rect(screen, BLACK, (OFFSET_X + 340, apuesta_y, 400, 200), 2)
+    pygame.draw.rect(screen, BLACK, (OFFSET_X + 492, apuesta_y, 480, 200), 2)
+    screen.blit(font.render("PARELL", True, BLACK), (OFFSET_X + 400, apuesta_y + 15))
+    screen.blit(font.render("SENAR", True, BLACK), (OFFSET_X + 500, apuesta_y + 15))
 
-def mostrar_historial(screen, historial):
-    font = pygame.font.Font(None, 24)
-    for i, tirada in enumerate(historial):
-        text = font.render(f"Tirada {i+1}: {tirada['resultat']}", True, (255, 255, 255))
-        screen.blit(text, (50, 100 + i*30))
+    # Espais per les tres columnes
+    for i in range(3):
+        x = OFFSET_X + 680 + i * (150 + espacio_entre)
+        pygame.draw.rect(screen, GREEN, (x, apuesta_y, 750, 200))
+        pygame.draw.rect(screen, BLACK, (x, apuesta_y, 750, 200), 2)
+        screen.blit(font.render(f"COLUMNA {i+1}", True, BLACK), (x + 20, apuesta_y + 15))
 
+    # Quadre de "Banca" a la dreta
+    pygame.draw.rect(screen, BROWN, (1000, 500, 200, 80))  # Banca
+    pygame.draw.rect(screen, WHITE, (1000, 500, 200, 80), 2)  # Contorn
+    screen.blit(font.render("BANCA", True, WHITE), (1050, 530))
 
-# Interfície gràfica
-def dibuixar_ruleta(screen, resultat=None):
-    pygame.draw.circle(screen, (200, 200, 200), (400, 300), 200, 0)
-    font = pygame.font.Font(None, 24)
-    for i, num in enumerate(NOMBRES):
-        angle = math.radians(i * (360 / len(NOMBRES)))
-        x = 400 + 180 * math.cos(angle)
-        y = 300 - 180 * math.sin(angle)
-        text = font.render(str(num), True, (0, 0, 0))
-        screen.blit(text, (x - text.get_width() / 2, y - text.get_height() / 2))
-    if resultat:
-        pygame.draw.line(screen, (255, 0, 0), (400, 300), (400, 100), 5)
+    # quadre de "gira"
+    pygame.draw.rect(screen, BROWN, (600, 500, 200, 60))  # Dibujar rectángulo
+    pygame.draw.rect(screen, RED, (600, 500, 200, 60), 4)  # Borde del botón
+    text = font.render("GIRAR", True, WHITE)
+    screen.blit(text, (650, 520))  # Posicionar texto en el botón
 
-def girar_ruleta_decreixent(screen):
+# Función para dibujar la ruleta circular con colores correspondientes
+def draw_roulette(winning_number=None):
+    center = (900, 300)
+    radius = 200
+    num_sectors = len(NUMEROS)
+    angle_per_sector = 360 / num_sectors
+
+    # Dibujar los sectores de la ruleta con sus colores
+    for i, num in enumerate(NUMEROS):
+        start_angle = math.radians(i * angle_per_sector)
+        end_angle = math.radians((i + 1) * angle_per_sector)
+        color = COLORS[num]
+        
+        # Dibujar cada sector usando draw.pie (simulado con polígonos)
+        points = [center]
+        for angle in range(int(start_angle * 180 / math.pi), int(end_angle * 180 / math.pi) + 1):
+            x = center[0] + radius * math.cos(math.radians(angle))
+            y = center[1] - radius * math.sin(math.radians(angle))
+            points.append((x, y))
+        pygame.draw.polygon(screen, color, points)
+        pygame.draw.polygon(screen, BLACK, points, 1)  # Borde de cada sector
+
+    # Dibujar los números encima de los sectores
+    for i, num in enumerate(NUMEROS):
+        angle = math.radians(i * angle_per_sector + angle_per_sector / 2)
+        x = center[0] + (radius - 30) * math.cos(angle)
+        y = center[1] - (radius - 30) * math.sin(angle)
+        text = font.render(str(num), True, WHITE if COLORS[num] != BLACK else WHITE)
+        screen.blit(text, (x - text.get_width() // 2, y - text.get_height() // 2))
+    
+    # Dibujar el número ganador si existe
+    if winning_number is not None:
+        pygame.draw.circle(screen, RED, center, 15)
+        result_text = font.render(f"Resultat: {winning_number}", True, WHITE)
+        screen.blit(result_text, (700, 600))
+    pygame.draw.line(screen, RED, (center[0], center[1] - radius - 10), (center[0], center[1] - radius - 30), 4)
+    
+# Simulació de l'animació de gir
+def animar_gir(ruleta, girs=15):
+    """Simula el gir de la ruleta amb velocitat decreixent."""
     angle = 0
-    velocitat = 0.1
+    velocitat = 20  # Velocitat inicial en graus/frame
     while velocitat > 0:
+        screen.fill(BROWN)
+        draw_table()
         angle += velocitat
-        velocitat *= 0.99  # Decelerar
-        pygame.draw.circle(screen, (200, 200, 200), (400, 300), 200, 0)  # Dibuixar ruleta
-        pygame.draw.arc(screen, (255, 0, 0), (200, 200, 400, 400), 0, math.radians(angle), 5)
+        draw_roulette(angle=angle % 360)
         pygame.display.flip()
-        pygame.time.delay(10)
+        clock.tick(FPS)
+        velocitat -= 0.5  # Reduir velocitat progressivament
+    return ruleta.girar()
+
+# Bucle principal del joc
+ruleta = Ruleta()
+jugadors = [Jugador("Taronja"), Jugador("Lila"), Jugador("Blau")]
 
 
-def joc_grafic():
-    pygame.init()
-    screen = pygame.display.set_mode((AMPLADA, ALCADA))
-    pygame.display.set_caption("Ruleta de Casino")
-    clock = pygame.time.Clock()
-    partida = Partida()
-    resultat = None
+# Actualització del càlcul de resultats i gestió d'apostes
+def processar_resultats(jugadors, resultat):
+    banca = 0  # Fitxes perdudes que van a la banca
+    for jugador in jugadors:
+        guany_total = 0
+        for tipus, quantitat, valor in jugador.apostes:
+            guany = 0
+            if tipus == "numero" and resultat["numero"] == valor:
+                guany = quantitat * 35
+            elif tipus == "color" and resultat["color"] == valor:
+                guany = quantitat * 1
+            elif tipus == "parell/senar" and resultat["parell/senar"] == valor:
+                guany = quantitat * 1
+            elif tipus == "columna" and resultat["columna"] == valor:
+                guany = quantitat * 2
+            
+            if guany > 0:
+                guany_total += guany
+            else:
+                banca += quantitat  # Les apostes perdudes van a la banca
+        
+        jugador.afegir_guanys(guany_total)
+        jugador.apostes = []  # Netejar apostes després de processar-les
+    return banca
 
-    running = True
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-                resultat = partida.ruleta.girar()
-                origen = (400, 300)
-                desti = (600, 100)
-                moure_fitxes(screen, origen, desti, (255, 0, 0))
 
-        screen.fill((0, 128, 0))
-        dibuixar_ruleta(screen, resultat)
-        pygame.display.flip()
-        clock.tick(30)
+# Comprovar si s'ha acabat el joc
+def verificar_final_partida(jugadors):
+    return all(jugador.saldo == 0 for jugador in jugadors)
 
-    pygame.quit()
 
-if __name__ == "__main__":
-    joc_grafic()
+# Funció per animar les fitxes perdudes a la "Banca"
+def animar_fitxes_a_banca(banca):
+    pygame.draw.rect(screen, BROWN, (1000, 500, 200, 80))  # Quadre de la banca
+    text = font.render(f"BANCA: {banca}", True, WHITE)
+    screen.blit(text, (1050, 530))
+
+
+# Bucle principal amb les noves funcionalitats
+running = True
+winning_number = None
+banca = 0
+
+while running:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            x, y = pygame.mouse.get_pos()
+            if 700 <= x <= 900 and 500 <= y <= 580:  # Botó "Girar"
+                # Resultat de la ruleta
+                winning_number, resultat_color = ruleta.girar()
+                resultat = {
+                    "numero": winning_number,
+                    "color": resultat_color,
+                    "parell/senar": "parell" if winning_number % 2 == 0 else "senar",
+                    "columna": (winning_number - 1) % 3 + 1 if winning_number != 0 else None,
+                }
+
+                # Processar resultats de les apostes
+                banca = processar_resultats(jugadors, resultat)
+
+                # Comprovar si el joc ha acabat
+                if verificar_final_partida(jugadors):
+                    print("Fi de la partida! Tots els jugadors s'han arruïnat.")
+                    running = False
+
+    # Dibuixar elements gràfics
+    screen.fill(BROWN)
+    draw_table()
+    draw_roulette(winning_number)
+    animar_fitxes_a_banca(banca)
+
+    # Actualitzar la pantalla
+    pygame.display.flip()
+
+# Sortir del programa
+pygame.quit()
+sys.exit()
