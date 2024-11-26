@@ -233,6 +233,7 @@ def draw_table3():
     
     
 # Función para realizar apuestas
+# Función para realizar apuestas
 def realizar_apuestas(jugadores):
     for jugador in jugadores:
         print(f"\nJugador: {jugador.nombre}")
