@@ -10,7 +10,7 @@ pygame.init()
 # Configuración de la ventana
 WIDTH, HEIGHT = 1200, 1000
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Ruleta de Casino con Botón Girar")
+pygame.display.set_caption("Ruleta")
 
 # Colores
 BLACK = (0, 0, 0)
@@ -76,26 +76,34 @@ deceleration = random.uniform(min_deceleration, max_deceleration)  # Desacelerac
 button_rect = pygame.Rect(500, 700, 200, 50)  # Rectángulo del botón
 
 # Clase para representar a los jugadores
+# Clase Jugador adaptada
 class Jugador:
     def __init__(self, nombre, color, saldo=100):
         self.nombre = nombre
         self.color = color
         self.saldo = saldo
-        self.fichas = self.calcular_fichas()
-
-    def calcular_fichas(self):
-        valores = [100, 50, 20, 10, 5]
-        fichas = {}
-        restante = self.saldo
-        for valor in valores:
-            cantidad = restante // valor
-            fichas[valor] = cantidad
-            restante %= valor
-        return fichas
-
+        self.fichas = {"005": 0, "010": 0, "020": 0, "050": 0, "100": 0}
+        self.actualizar_fichas()
 
     def actualizar_fichas(self):
-        self.fichas = self.calcular_fichas()
+        """
+        Actualiza las fichas del jugador reorganizando el saldo disponible.
+        """
+        valores = ["100", "050", "020", "010", "005"]
+        restante = self.saldo
+        for valor in valores:
+            ficha_valor = int(valor)
+            self.fichas[valor] = restante // ficha_valor
+            restante %= ficha_valor
+
+    def saldo_total(self):
+        """
+        Devuelve el saldo total basado en las fichas del jugador.
+        """
+        return sum(int(valor) * cantidad for valor, cantidad in self.fichas.items())
+    
+
+
 
 # Crear jugadores
 jugadores = [
@@ -103,6 +111,7 @@ jugadores = [
     Jugador("Lila", (128, 0, 128)),     # Lila
     Jugador("Blau", (0, 0, 255))        # Azul
 ]
+
 
 # Función para dibujar la tabla de ruleta
 def draw_table():
@@ -130,16 +139,18 @@ def draw_table():
 def draw_bets():
     for jugador, apuestas_jugador in apuestas.items():
         for tipo, valor, detalle in apuestas_jugador:
-            if tipo == "número":
+            if tipo == "número":  # Apuesta en un número
                 col = (detalle - 1) % 3
                 row = (detalle - 1) // 3
                 x = 150 + col * 80 + 40
                 y = 50 + row * 40 + 20
+
+                # Dibujar la ficha
                 pygame.draw.circle(screen, jugador.color, (x, y), 15)
-            elif tipo == "color":
-                x = 500
-                y = 90 if detalle == RED else 170
-                pygame.draw.circle(screen, jugador.color, (x, y), 15)
+
+                # Mostrar el valor de la ficha
+                texto = font.render(f"{valor:03}", True, WHITE)
+                screen.blit(texto, (x - texto.get_width() // 2, y - texto.get_height() // 2))
 
 
 def draw_table2(): 
@@ -333,20 +344,23 @@ apuestas = {jugador.nombre: [] for jugador in jugadores}
 ficha_seleccionada = None
 jugador_actual = None
 for event in pygame.event.get():
-    if event.type == pygame.QUIT:
-        running = False
-
-    # Seleccionar ficha al hacer clic sobre un jugador
     if event.type == pygame.MOUSEBUTTONDOWN:
         mouse_x, mouse_y = event.pos
+    if event.type == pygame.QUIT:
+        running = False
+        # Detectar clics en las fichas de los jugadores
         for jugador in jugadores:
             x = 50 + jugadores.index(jugador) * 400
-        if x <= mouse_x <= x + 300 and 750 <= mouse_y <= 850:
+            fichas_y = 640  # Coordenada inicial de las fichas
             for valor, cantidad in jugador.fichas.items():
-                if cantidad > 0:  # Solo selecciona fichas si hay disponibles
-                    ficha_seleccionada = valor
-                    jugador_actual = jugador
-                    break
+                if cantidad > 0:  # Solo detecta si hay fichas disponibles
+                    ficha_centro = (x + 20, fichas_y + 10)
+                    if math.hypot(mouse_x - ficha_centro[0], mouse_y - ficha_centro[1]) <= 10:  # Círculo clicable
+                        ficha_seleccionada = valor
+                        jugador_actual = jugador
+                        print(f"Seleccionada ficha de {valor} por {jugador.nombre}")
+                        break
+                fichas_y += 30
 
     # Al soltar la ficha, registrar la apuesta
     if event.type == pygame.MOUSEBUTTONUP and ficha_seleccionada:
@@ -376,49 +390,56 @@ for event in pygame.event.get():
             jugador_actual.apostar(ficha_seleccionada)
             apuestas_hechas = True
 
+        if 150 <= mouse_x <= 390 and 50 <= mouse_y <= 530:
+            col = (mouse_x - 150) // 80  # Columna
+            row = (mouse_y - 50) // 40   # Fila
+            numero = row * 3 + col + 1   # Calcular el número basado en fila y columna
+
+        # Registrar la apuesta
+        if jugador_actual.saldo >= ficha_seleccionada:
+            apuestas[jugador_actual.nombre].append(("número", ficha_seleccionada, numero))
+            jugador_actual.saldo -= ficha_seleccionada
+            jugador_actual.actualizar_fichas()
+            apuestas_hechas = True
+            print(f"{jugador_actual.nombre} apostó {ficha_seleccionada} al número {numero}")
+        else:
+            print(f"{jugador_actual.nombre} no tiene suficiente saldo para apostar.")
+
+        # Registrar la apuesta
+        apuestas[jugador_actual.nombre].append(("número", ficha_seleccionada, numero))
+        jugador_actual.saldo -= ficha_seleccionada
+        jugador_actual.actualizar_fichas()
+        apuestas_hechas = True
+
+        print(f"{jugador_actual.nombre} apostó {ficha_seleccionada} al número {numero}")
+
+
         # Resetear selección
         ficha_seleccionada = None
     # Colocar la ficha en un área de apuesta
-    if event.type == pygame.MOUSEBUTTONUP and ficha_seleccionada:
-        mouse_x, mouse_y = event.pos
-        if 50 <= mouse_x <= 150 + 3 * CELL_WIDTH and 50 <= mouse_y <= 50 + 12 * CELL_HEIGHT:
-            col = (mouse_x - 150) // CELL_WIDTH
-            row = (mouse_y - 50) // CELL_HEIGHT
-            numero_apostado = row * 3 + col + 1
-            apuestas[jugador_actual.nombre].append(("número", ficha_seleccionada, numero_apostado))
-            jugador_actual.saldo -= ficha_seleccionada
-            jugador_actual.actualizar_fichas()
-            apuestas_hechas = True
-        elif 470 <= mouse_x <= 550 and 50 <= mouse_y <= 250:  # Color rojo/negro
-            color_apostado = RED if mouse_y < 150 else BLACK
-            apuestas[jugador_actual.nombre].append(("color", ficha_seleccionada, color_apostado))
-            jugador_actual.saldo -= ficha_seleccionada
-            jugador_actual.actualizar_fichas()
-            apuestas_hechas = True
-        elif 390 <= mouse_x <= 470 and 50 <= mouse_y <= 250:  # Columnas
-            columna_apostada = (mouse_y - 50) // CELL_HEIGHT2 + 1
-            apuestas[jugador_actual.nombre].append(("columna", ficha_seleccionada, columna_apostada))
-            jugador_actual.saldo -= ficha_seleccionada
-            jugador_actual.actualizar_fichas()
-            apuestas_hechas = True
+if event.type == pygame.MOUSEBUTTONUP and ficha_seleccionada:
+    mouse_x, mouse_y = event.pos
+        # Apuesta en números
+    if 150 <= mouse_x <= 390 and 50 <= mouse_y <= 530:  # Celdas numéricas
+        col = (mouse_x - 150) // 80
+        row = (mouse_y - 50) // 40
+        numero = row * 3 + col + 1
+        apuestas[jugador_actual.nombre].append(("número", ficha_seleccionada, numero))
+        jugador_actual.saldo -= ficha_seleccionada
+        jugador_actual.actualizar_fichas()
+        apuestas_hechas = True
 
-        # Resetear selección
-        ficha_seleccionada = None
-        jugador_actual = None
+    # Apuesta en colores
+    elif 470 <= mouse_x <= 550 and 50 <= mouse_y <= 210:  # Rojo o Negro
+        color = RED if mouse_y < 130 else BLACK
+        apuestas[jugador_actual.nombre].append(("color", ficha_seleccionada, color))
+        jugador_actual.saldo -= ficha_seleccionada
+        jugador_actual.actualizar_fichas()
+        apuestas_hechas = True
 
-    # Girar la ruleta solo si hay apuestas
-    if event.type == pygame.MOUSEBUTTONDOWN:
-        mouse_x, mouse_y = event.pos
-        # Detectar clic en el botón de "Girar"
-        if button_rect.collidepoint(mouse_x, mouse_y) and not is_spinning:
-            if apuestas_hechas:  # Solo girar si hay apuestas
-                winning_number, _ = ruleta.girar()
-                is_spinning = True
-                spin_speed = 20  # Reiniciar la velocidad inicial
-            else:
-                print("Debe realizar al menos una apuesta antes de girar.")
-
-
+    # Resetear ficha seleccionada
+    ficha_seleccionada = None
+    jugador_actual = None
     
 
 button_rect = pygame.Rect(850, 480, 200, 50)
@@ -430,6 +451,11 @@ def draw_button():
     text = button_font.render("Girar", True, WHITE)
     screen.blit(text, (button_rect.x + (button_rect.width - text.get_width()) // 2,
                        button_rect.y + (button_rect.height - text.get_height()) // 2))
+def finDelJuego():
+    print(Back.BLACK + Fore.LIGHTWHITE_EX + "Fin del juego")
+    print("Jugaste un total de", contador_total, "apuestas")
+    print("Tu saldo final es de $", fondo)
+    print("Gracias por jugar!" + Fore.RESET + Back.RESET)
 
 
 
@@ -441,6 +467,7 @@ while running:
         if event.type == pygame.QUIT:
             running = False
         if event.type == pygame.MOUSEBUTTONDOWN:
+            mouse_x, mouse_y = event.pos 
             if button_rect.collidepoint(event.pos) and not is_spinning:
                 winning_number, _ = ruleta.girar()
                 is_spinning = True
@@ -448,20 +475,28 @@ while running:
         
         # Detectar presionar la tecla Enter
         if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_RETURN and not is_spinning:
-                winning_number, _ = ruleta.girar()
-                is_spinning = True
-                spin_speed = 20  # Reiniciar la velocidad inicial
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            mouse_x, mouse_y = event.pos
-            if button_rect.collidepoint(mouse_x, mouse_y) and not is_spinning:
-                if apuestas_hechas:  # Solo girar si hay apuestas
-                    winning_number, _ = ruleta.girar()
-                    is_spinning = True
-                    spin_speed = 20  # Reiniciar la velocidad inicial
-                else:
-                    print("Debe realizar al menos una apuesta antes de girar.")
-        
+            if jugador_actual and ficha_seleccionada:
+                if event.unicode.isdigit():  # Apuesta en número específico
+                    numero = int(event.unicode)
+                    if 0 <= numero <= 36:
+                        apuestas[jugador_actual.nombre].append(("número", ficha_seleccionada, numero))
+                        jugador_actual.saldo -= ficha_seleccionada
+                        jugador_actual.actualizar_fichas()
+                        apuestas_hechas = True
+                elif event.unicode.lower() in ["r", "n"]:  # Apuesta en rojo o negro
+                    color = RED if event.unicode.lower() == "r" else BLACK
+                    apuestas[jugador_actual.nombre].append(("color", ficha_seleccionada, color))
+                    jugador_actual.saldo -= ficha_seleccionada
+                    jugador_actual.actualizar_fichas()
+                    apuestas_hechas = True
+                elif event.unicode in ["1", "2", "3"]:  # Apuesta en columnas
+                    columna = int(event.unicode)
+                    apuestas[jugador_actual.nombre].append(("columna", ficha_seleccionada, columna))
+                    jugador_actual.saldo -= ficha_seleccionada
+                    jugador_actual.actualizar_fichas()
+                    apuestas_hechas = True
+                # Resetear ficha seleccionada
+                ficha_seleccionada = None
 
     
     # Verificar si todos los jugadores están arruinados
@@ -478,11 +513,7 @@ while running:
     draw_table2()
     draw_table3()
     draw_table4()
-    draw_bets()
 
-
-    # Dibujar las apuestas
-    draw_apuestas()
     # Actualizar la ruleta con animación
     # En el bucle principal, después de `if is_spinning:`
     if is_spinning:
@@ -520,24 +551,6 @@ while running:
     # Actualizar la pantalla
     pygame.display.flip()
 
-if not is_spinning and winning_number is not None:
-    winning_number = None 
-    for jugador in jugadores:
-        for apuesta in apuestas[jugador.nombre]:
-            tipo, valor, detalle = apuesta
-            if tipo == "número" and detalle == winning_number:  # Gana por número exacto
-                jugador.saldo += valor * 35
-            elif tipo == "color" and detalle == COLORS[winning_number]:  # Gana por color
-                jugador.saldo += valor * 2
-            elif tipo == "columna" and (winning_number - 1) // 12 + 1 == detalle:  # Gana por columna
-                jugador.saldo += valor * 3
-            # Otras reglas de apuesta (par/impar) pueden añadirse aquí
-
-        # Limpiar apuestas del jugador
-        apuestas[jugador.nombre] = []
-    apuestas_hechas = False
-
-
         # Resetear apuestas
     for jugador in jugadores:
         jugador.actualizar_fichas()
@@ -545,4 +558,3 @@ if not is_spinning and winning_number is not None:
 # Salir de Pygame
 pygame.quit()
 sys.exit()
-
