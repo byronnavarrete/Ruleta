@@ -126,6 +126,22 @@ def draw_table():
         # Dibujar el número dentro de la celda
         text = font.render(number, True, WHITE if color != BLACK else WHITE)
         screen.blit(text, (x + (CELL_WIDTH - text.get_width()) // 2, y + (CELL_HEIGHT - text.get_height()) // 2))
+
+def draw_bets():
+    for jugador, apuestas_jugador in apuestas.items():
+        for tipo, valor, detalle in apuestas_jugador:
+            if tipo == "número":
+                col = (detalle - 1) % 3
+                row = (detalle - 1) // 3
+                x = 150 + col * 80 + 40
+                y = 50 + row * 40 + 20
+                pygame.draw.circle(screen, jugador.color, (x, y), 15)
+            elif tipo == "color":
+                x = 500
+                y = 90 if detalle == RED else 170
+                pygame.draw.circle(screen, jugador.color, (x, y), 15)
+
+
 def draw_table2(): 
     rows = 3
     cols = 1
@@ -325,14 +341,43 @@ for event in pygame.event.get():
         mouse_x, mouse_y = event.pos
         for jugador in jugadores:
             x = 50 + jugadores.index(jugador) * 400
-            y = 750
-            if x <= mouse_x <= x + 300 and y <= mouse_y <= y + 100:
-                for valor, cantidad in jugador.fichas.items():
-                    if cantidad > 0:
-                        ficha_seleccionada = valor
-                        jugador_actual = jugador
-                        break
+        if x <= mouse_x <= x + 300 and 750 <= mouse_y <= 850:
+            for valor, cantidad in jugador.fichas.items():
+                if cantidad > 0:  # Solo selecciona fichas si hay disponibles
+                    ficha_seleccionada = valor
+                    jugador_actual = jugador
+                    break
 
+    # Al soltar la ficha, registrar la apuesta
+    if event.type == pygame.MOUSEBUTTONUP and ficha_seleccionada:
+        mouse_x, mouse_y = event.pos
+        # Detectar si se soltó en un número válido
+        if 150 <= mouse_x <= 390 and 50 <= mouse_y <= 530:
+            col = (mouse_x - 150) // 80
+            row = (mouse_y - 50) // 40
+            numero = row * 3 + col + 1
+            apuestas[jugador_actual.nombre].append(("número", ficha_seleccionada, numero))
+            jugador_actual.apostar(ficha_seleccionada)
+            apuestas_hechas = True  # Marcar que se realizó una apuesta
+            if jugador_actual.saldo >= ficha_seleccionada:
+                apuestas[jugador_actual.nombre].append(("número", ficha_seleccionada, numero))
+                jugador_actual.saldo -= ficha_seleccionada
+                jugador_actual.actualizar_fichas()
+                apuestas_hechas = True
+            else:
+                print(f"{jugador_actual.nombre} no tiene suficiente saldo para apostar.")
+        # Detectar si se soltó en "Rojo" o "Negro"
+        elif 470 <= mouse_x <= 550 and 50 <= mouse_y <= 130:
+            apuestas[jugador_actual.nombre].append(("color", ficha_seleccionada, RED))
+            jugador_actual.apostar(ficha_seleccionada)
+            apuestas_hechas = True
+        elif 470 <= mouse_x <= 550 and 130 <= mouse_y <= 210:
+            apuestas[jugador_actual.nombre].append(("color", ficha_seleccionada, BLACK))
+            jugador_actual.apostar(ficha_seleccionada)
+            apuestas_hechas = True
+
+        # Resetear selección
+        ficha_seleccionada = None
     # Colocar la ficha en un área de apuesta
     if event.type == pygame.MOUSEBUTTONUP and ficha_seleccionada:
         mouse_x, mouse_y = event.pos
@@ -364,14 +409,14 @@ for event in pygame.event.get():
     # Girar la ruleta solo si hay apuestas
     if event.type == pygame.MOUSEBUTTONDOWN:
         mouse_x, mouse_y = event.pos
+        # Detectar clic en el botón de "Girar"
         if button_rect.collidepoint(mouse_x, mouse_y) and not is_spinning:
-            if apuestas_hechas:
-                winning_number, winning_color = ruleta.girar()
+            if apuestas_hechas:  # Solo girar si hay apuestas
+                winning_number, _ = ruleta.girar()
                 is_spinning = True
-                spin_speed = 20
+                spin_speed = 20  # Reiniciar la velocidad inicial
             else:
                 print("Debe realizar al menos una apuesta antes de girar.")
-
 
 
     
@@ -416,6 +461,13 @@ while running:
                     spin_speed = 20  # Reiniciar la velocidad inicial
                 else:
                     print("Debe realizar al menos una apuesta antes de girar.")
+        
+
+    
+    # Verificar si todos los jugadores están arruinados
+    if all(jugador.saldo <= 0 for jugador in jugadores):
+        print("¡Todos los jugadores están arruinados! Fin del juego.")
+        running = False
 
 
     # Dibujar el fondo
@@ -426,16 +478,39 @@ while running:
     draw_table2()
     draw_table3()
     draw_table4()
+    draw_bets()
+
 
     # Dibujar las apuestas
     draw_apuestas()
     # Actualizar la ruleta con animación
+    # En el bucle principal, después de `if is_spinning:`
     if is_spinning:
         rotation_angle += spin_speed
-        spin_speed *= deceleration  # Reducir gradualmente la velocidad
-        if spin_speed < 0.1:  # Cuando la velocidad es muy baja, detener
+        spin_speed *= deceleration
+        if spin_speed < 0.1:  # Parar el giro
             is_spinning = False
-            rotation_angle = winning_number * (360 / len(NUMEROS))  # Ajustar al número ganador
+            for jugador in jugadores:
+                for tipo, valor, detalle in apuestas[jugador.nombre]:
+                    if tipo == "número" and detalle == ruleta.resultado:
+                        jugador.saldo += valor * 35
+                    elif tipo == "color" and detalle == COLORS[ruleta.resultado]:
+                        jugador.saldo += valor * 2
+                    elif tipo == "columna" and (ruleta.resultado - 1) // 12 + 1 == detalle:
+                        jugador.saldo += valor * 3
+                apuestas[jugador.nombre] = []  # Limpiar apuestas después de procesarlas
+            apuestas_hechas = False  # Resetea el estado de apuestas
+    if apuestas_hechas:  # Solo girar si hay apuestas
+        winning_number, _ = ruleta.girar()
+        is_spinning = True
+        spin_speed = 20  # Reiniciar la velocidad inicial
+    else:
+        print("Debe realizar al menos una apuesta antes de girar.")
+
+    
+    # Resetear estado de la ruleta
+    is_spinning = False
+    apuestas_hechas = False
     
     draw_roulette(winning_number, rotation_angle)
 
@@ -445,8 +520,8 @@ while running:
     # Actualizar la pantalla
     pygame.display.flip()
 
-
 if not is_spinning and winning_number is not None:
+    winning_number = None 
     for jugador in jugadores:
         for apuesta in apuestas[jugador.nombre]:
             tipo, valor, detalle = apuesta
