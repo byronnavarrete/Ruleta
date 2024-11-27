@@ -88,9 +88,11 @@ class Jugador:
         fichas = {}
         restante = self.saldo
         for valor in valores:
-            fichas[valor] = restante // valor
+            cantidad = restante // valor
+            fichas[valor] = cantidad
             restante %= valor
         return fichas
+
 
     def actualizar_fichas(self):
         self.fichas = self.calcular_fichas()
@@ -228,6 +230,27 @@ def draw_table4():
             text_rect = text.get_rect(center=(x + CELL_WIDTH // 2, y + CELL_HEIGHT // 2))
             screen.blit(text, text_rect)
 
+def draw_apuestas():
+    for jugador, apuestas_jugador in apuestas.items():
+        for tipo, valor, detalle in apuestas_jugador:
+            if tipo == "número":  # Apuesta a un número
+                col = (detalle - 1) % 3
+                row = (detalle - 1) // 3
+                x = 150 + col * CELL_WIDTH + CELL_WIDTH // 2
+                y = 50 + row * CELL_HEIGHT + CELL_HEIGHT // 2
+            elif tipo == "color":  # Apuesta a un color
+                x = 500
+                y = 75 if detalle == RED else 175
+            elif tipo == "columna":  # Apuesta a una columna
+                x = 430
+                y = 75 + (detalle - 1) * CELL_HEIGHT2
+
+            # Dibujar ficha
+            pygame.draw.circle(screen, jugador.color, (x, y), 15)
+            texto = font.render(f"{valor:03}", True, WHITE)
+            screen.blit(texto, (x - texto.get_width() // 2, y - texto.get_height() // 2))
+
+
 # Función para dibujar la ruleta circular con colores correspondientes
 def draw_roulette(winning_number, rotation):
     center = (950, 265)
@@ -294,10 +317,13 @@ apuestas = {jugador.nombre: [] for jugador in jugadores}
 ficha_seleccionada = None
 jugador_actual = None
 for event in pygame.event.get():
+    if event.type == pygame.QUIT:
+        running = False
+
+    # Seleccionar ficha al hacer clic sobre un jugador
     if event.type == pygame.MOUSEBUTTONDOWN:
         mouse_x, mouse_y = event.pos
         for jugador in jugadores:
-            # Detectar si seleccionó una ficha de un jugador
             x = 50 + jugadores.index(jugador) * 400
             y = 750
             if x <= mouse_x <= x + 300 and y <= mouse_y <= y + 100:
@@ -307,18 +333,47 @@ for event in pygame.event.get():
                         jugador_actual = jugador
                         break
 
+    # Colocar la ficha en un área de apuesta
     if event.type == pygame.MOUSEBUTTONUP and ficha_seleccionada:
         mouse_x, mouse_y = event.pos
-        # Detectar si soltó la ficha en un área válida
         if 50 <= mouse_x <= 150 + 3 * CELL_WIDTH and 50 <= mouse_y <= 50 + 12 * CELL_HEIGHT:
-            apuestas[jugador_actual.nombre].append((ficha_seleccionada, (mouse_x, mouse_y)))
+            col = (mouse_x - 150) // CELL_WIDTH
+            row = (mouse_y - 50) // CELL_HEIGHT
+            numero_apostado = row * 3 + col + 1
+            apuestas[jugador_actual.nombre].append(("número", ficha_seleccionada, numero_apostado))
             jugador_actual.saldo -= ficha_seleccionada
             jugador_actual.actualizar_fichas()
-            apuestas_hechas = True  # Se registró una apuesta
+            apuestas_hechas = True
+        elif 470 <= mouse_x <= 550 and 50 <= mouse_y <= 250:  # Color rojo/negro
+            color_apostado = RED if mouse_y < 150 else BLACK
+            apuestas[jugador_actual.nombre].append(("color", ficha_seleccionada, color_apostado))
+            jugador_actual.saldo -= ficha_seleccionada
+            jugador_actual.actualizar_fichas()
+            apuestas_hechas = True
+        elif 390 <= mouse_x <= 470 and 50 <= mouse_y <= 250:  # Columnas
+            columna_apostada = (mouse_y - 50) // CELL_HEIGHT2 + 1
+            apuestas[jugador_actual.nombre].append(("columna", ficha_seleccionada, columna_apostada))
+            jugador_actual.saldo -= ficha_seleccionada
+            jugador_actual.actualizar_fichas()
+            apuestas_hechas = True
 
         # Resetear selección
         ficha_seleccionada = None
         jugador_actual = None
+
+    # Girar la ruleta solo si hay apuestas
+    if event.type == pygame.MOUSEBUTTONDOWN:
+        mouse_x, mouse_y = event.pos
+        if button_rect.collidepoint(mouse_x, mouse_y) and not is_spinning:
+            if apuestas_hechas:
+                winning_number, winning_color = ruleta.girar()
+                is_spinning = True
+                spin_speed = 20
+            else:
+                print("Debe realizar al menos una apuesta antes de girar.")
+
+
+
     
 
 button_rect = pygame.Rect(850, 480, 200, 50)
@@ -371,6 +426,9 @@ while running:
     draw_table2()
     draw_table3()
     draw_table4()
+
+    # Dibujar las apuestas
+    draw_apuestas()
     # Actualizar la ruleta con animación
     if is_spinning:
         rotation_angle += spin_speed
@@ -387,22 +445,22 @@ while running:
     # Actualizar la pantalla
     pygame.display.flip()
 
+
 if not is_spinning and winning_number is not None:
     for jugador in jugadores:
         for apuesta in apuestas[jugador.nombre]:
-            valor_ficha, (x, y) = apuesta
-            # Aquí evalúa las apuestas (números, colores, etc.)
-            # Ejemplo para números:
-            if 50 <= x <= 150 and 50 <= y <= 50 + 12 * CELL_HEIGHT:
-                col = (x - 150) // CELL_WIDTH
-                row = (y - 50) // CELL_HEIGHT
-                numero_apostado = row * 3 + col + 1
-                if numero_apostado == winning_number:
-                    jugador.saldo += valor_ficha * 35
+            tipo, valor, detalle = apuesta
+            if tipo == "número" and detalle == winning_number:  # Gana por número exacto
+                jugador.saldo += valor * 35
+            elif tipo == "color" and detalle == COLORS[winning_number]:  # Gana por color
+                jugador.saldo += valor * 2
+            elif tipo == "columna" and (winning_number - 1) // 12 + 1 == detalle:  # Gana por columna
+                jugador.saldo += valor * 3
+            # Otras reglas de apuesta (par/impar) pueden añadirse aquí
 
-        # Resetear apuestas del jugador
+        # Limpiar apuestas del jugador
         apuestas[jugador.nombre] = []
-    apuestas_hechas = False  # No hay apuestas tras evaluar resultados
+    apuestas_hechas = False
 
 
         # Resetear apuestas
